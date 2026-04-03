@@ -1,41 +1,37 @@
 from transformers import pipeline
-from utils import detect_coin
 
-# 🔥 Lazy loading (IMPORTANT FIX)
-classifier = None
+# ✅ Load model ONCE (very important)
+classifier = pipeline("sentiment-analysis")
 
-def get_model():
-    global classifier
-    if classifier is None:
-        print("Loading sentiment model...")
-        classifier = pipeline("sentiment-analysis")
-    return classifier
+def detect_coin(text: str):
+    text = text.lower()
+
+    if "bitcoin" in text or "btc" in text:
+        return "BTC"
+    elif "ethereum" in text or "eth" in text:
+        return "ETH"
+    else:
+        return "CRYPTO"
 
 
 def analyze(news_list):
+    if not news_list:
+        return {}
+
+    # ✅ Batch processing (fast)
+    outputs = classifier(news_list)
+
     results = {}
 
-    model = get_model()  # ✅ load once when needed
-
-    for text in news_list:
+    for text, output in zip(news_list, outputs):
         coin = detect_coin(text)
-        print(text)
-
-        if not coin:
-            continue
-
-        # ✅ use model instead of classifier
-        output = model(text)[0]
-
-        sentiment = output["label"]
-        confidence = output["score"]
 
         if coin not in results:
             results[coin] = []
 
         results[coin].append({
-            "sentiment": sentiment,
-            "confidence": confidence
+            "sentiment": output["label"],
+            "confidence": output["score"]
         })
 
     return results
@@ -45,14 +41,8 @@ def aggregate(results):
     final = {}
 
     for coin, entries in results.items():
-        pos = 0
-        neg = 0
-
-        for item in entries:
-            if item["sentiment"] == "POSITIVE":
-                pos += 1
-            else:
-                neg += 1
+        pos = sum(1 for e in entries if e["sentiment"] == "POSITIVE")
+        neg = sum(1 for e in entries if e["sentiment"] == "NEGATIVE")
 
         if pos > neg:
             sentiment = "Bullish 📈"
@@ -61,11 +51,11 @@ def aggregate(results):
         else:
             sentiment = "Neutral 😐"
 
-        avg_confidence = sum(item["confidence"] for item in entries) / len(entries)
+        avg_conf = sum(e["confidence"] for e in entries) / len(entries)
 
         final[coin] = {
             "sentiment": sentiment,
-            "confidence": round(avg_confidence, 2)
+            "confidence": round(avg_conf, 2)
         }
 
     return final

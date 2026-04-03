@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sentiment import analyze, aggregate
-import time
 from news import get_news_for_coin
+import time
+
 app = FastAPI()
 
-# ✅ Enable CORS (for Next.js)
+# ✅ Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,12 +15,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Cache: { coin: {data, timestamp} }
+# ✅ Cache
 cache = {}
 CACHE_TTL = 86400  # 1 day
 
 
-# ✅ Normalize coin names → symbols
+# ✅ Normalize coin names
 coin_map = {
     "bitcoin": "BTC",
     "btc": "BTC",
@@ -32,7 +33,7 @@ coin_map = {
 }
 
 
-# ✅ Keywords for filtering
+# ✅ Keywords
 coin_keywords = {
     "BTC": ["bitcoin", "btc"],
     "ETH": ["ethereum", "eth"],
@@ -48,60 +49,68 @@ def home():
 
 @app.get("/coin-sentiment")
 def coin_sentiment(coin: str):
-    # 🔥 STEP 1 — Normalize input
-    coin = coin_map.get(coin.lower(), coin.upper())
+    try:
+        # 🔥 STEP 1 — Normalize
+        coin = coin_map.get(coin.lower(), coin.upper())
+        print("REQUESTED COIN:", coin)
 
-    print("REQUESTED COIN:", coin)
+        # ✅ STEP 2 — Cache
+        if coin in cache:
+            if time.time() - cache[coin]["timestamp"] < CACHE_TTL:
+                print("Returning from cache")
+                return cache[coin]["data"]
 
-    # ✅ STEP 2 — Check cache
-    if coin in cache:
-        if time.time() - cache[coin]["timestamp"] < CACHE_TTL:
-            print("Returning from cache")
-            return cache[coin]["data"]
+        # ✅ STEP 3 — Fetch news
+        news = get_news_for_coin(coin)
 
-    # ✅ Fetch real news
-    news = get_news_for_coin(coin)
+        if not news:
+            return {coin: {"sentiment": "No data 😐", "confidence": 0}}
 
-    # 🔥 STEP 3 — Filter news correctly
-    keywords = coin_keywords.get(coin, [])
+        # 🔥 STEP 4 — Filter news
+        keywords = coin_keywords.get(coin, [])
 
-    filtered_news = [
-        n for n in news
-        if any(k in n.lower() for k in keywords)
-    ]
+        filtered_news = [
+            n for n in news
+            if any(k in n.lower() for k in keywords)
+        ]
 
-    print("FILTERED NEWS COUNT:", len(filtered_news))
+        print("FILTERED NEWS COUNT:", len(filtered_news))
 
-    # fallback if nothing found
-    if not filtered_news:
-        print("No specific news found, using all news")
-        filtered_news = news
+        if not filtered_news:
+            print("No specific news found, using all news")
+            filtered_news = news
 
-    # ✅ STEP 4 — Analyze + aggregate
-    analyzed = analyze(filtered_news)
-    result = aggregate(analyzed)
+        # 🚀 LIMIT (VERY IMPORTANT for speed)
+        filtered_news = filtered_news[:10]
 
-    print("AGGREGATED RESULT:", result)
+        # ✅ STEP 5 — Analyze
+        analyzed = analyze(filtered_news)
 
-    # 🔥 STEP 5 — Extract only requested coin
-    coin_result = result.get(coin)
+        if not analyzed:
+            return {coin: {"sentiment": "No data 😐", "confidence": 0}}
 
-    if not coin_result:
-        coin_result = {
+        result = aggregate(analyzed)
+
+        print("AGGREGATED RESULT:", result)
+
+        # 🔥 STEP 6 — Extract coin
+        coin_result = result.get(coin, {
             "sentiment": "No data 😐",
             "confidence": 0
+        })
+
+        response = {coin: coin_result}
+
+        print("FINAL RESPONSE:", response)
+
+        # ✅ STEP 7 — Cache
+        cache[coin] = {
+            "data": response,
+            "timestamp": time.time()
         }
 
-    response = {
-        coin: coin_result
-    }
+        return response
 
-    print("FINAL RESPONSE:", response)
-
-    # ✅ STEP 6 — Store in cache
-    cache[coin] = {
-        "data": response,
-        "timestamp": time.time()
-    }
-
-    return response
+    except Exception as e:
+        print("ERROR:", e)
+        return {"error": str(e)}
