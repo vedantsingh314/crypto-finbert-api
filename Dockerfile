@@ -19,7 +19,7 @@ COPY --from=builder /install /usr/local
 
 # Copy app source
 COPY app/  ./app/
-COPY news.py utils.py ./     
+COPY app/news.py app/utils.py ./   
                       
 
 # Security: run as non-root
