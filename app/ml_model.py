@@ -20,9 +20,6 @@ from app.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Label ordering must match your training label2id mapping
-LABELS = ["bearish", "bullish", "neutral"]
-
 
 class ModelManager:
     """
@@ -31,15 +28,16 @@ class ModelManager:
     """
 
     def __init__(self, model_dir: str, device: str = "auto", max_length: int = 128):
-        model_path = Path(model_dir)
+        # Resolve to absolute path — avoids issues with relative paths inside Docker
+        model_path = Path(model_dir).resolve()
+
         if not model_path.exists():
             logger.info("Model not found locally, downloading from Hugging Face...")
             snapshot_download(
-                repo_id="ghost5151/crypto-finbert",  
-                local_dir="/app/model",
+                repo_id="ghost5151/crypto-finbert",
+                local_dir=str(model_path),   # use resolved absolute path
             )
             logger.info("Model downloaded to %s", model_path)
-
 
         # Resolve device
         if device == "auto":
@@ -53,15 +51,17 @@ class ModelManager:
         logger.info("Loading model on %s", self.device)
         self.model = AutoModelForSequenceClassification.from_pretrained(
             str(model_path),
-            # Use half precision on GPU for ~2× speed + half VRAM
             torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
         ).to(self.device)
-        self.model.eval()          # Disable dropout, batch-norm tracking
+        self.model.eval()
+
+        # Read labels directly from config — never hardcode
         self.labels = [
             self.model.config.id2label[i]
             for i in range(len(self.model.config.id2label))
         ]
         logger.info("Labels loaded from config: %s", self.labels)
+
         self.max_length = max_length
 
         # Warm-up pass to compile CUDA kernels (avoids cold-start latency)
@@ -69,10 +69,8 @@ class ModelManager:
             self._warmup()
 
     def _warmup(self):
-        logger.info("Running GPU warm-up pass…")
+        logger.info("Running GPU warm-up pass...")
         self.predict(["warm up"])
-
-    # ── Single prediction ────────────────────────────────────────────────────
 
     def predict(self, headlines: list[str]) -> list[dict]:
         """
@@ -92,8 +90,8 @@ class ModelManager:
         with torch.no_grad():
             logits = self.model(**inputs).logits         # (B, 3)
 
-        # Softmax → probabilities; move to CPU for numpy/json serialisation
-        probs = F.softmax(logits, dim=-1).cpu().float()  # float32 always
+        # Softmax → probabilities; move to CPU for json serialisation
+        probs = F.softmax(logits, dim=-1).cpu().float()
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
         per_item_ms = elapsed_ms / len(headlines)
@@ -103,15 +101,15 @@ class ModelManager:
             p = probs[i].tolist()
             label_idx = int(probs[i].argmax())
             results.append({
-                "headline":    headline,
-                "confidence":  round(p[label_idx], 4),
-               "label": self.labels[label_idx],
+                "headline":   headline,
+                "label":      self.labels[label_idx],
+                "confidence": round(p[label_idx], 4),
                 "scores": {
-                    self.labels[0]: round(p[0], 4),   # negative
-                    self.labels[1]: round(p[1], 4),   # neutral
-                    self.labels[2]: round(p[2], 4),   # positive
+                    self.labels[0]: round(p[0], 4),
+                    self.labels[1]: round(p[1], 4),
+                    self.labels[2]: round(p[2], 4),
                 },
-                "latency_ms":  round(per_item_ms, 2),
+                "latency_ms": round(per_item_ms, 2),
             })
 
         return results
