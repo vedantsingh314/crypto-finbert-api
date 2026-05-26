@@ -23,7 +23,11 @@ COPY app/news.py utils.py ./
                       
 
 # Security: run as non-root
-RUN useradd -m -u 1001 appuser
+# Create model dir and give appuser permission to write to it
+RUN useradd -m -u 1001 appuser && \
+    mkdir -p /app/model && \
+    chown -R appuser:appuser /app
+
 USER appuser
 
 EXPOSE 8000

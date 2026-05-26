@@ -36,7 +36,7 @@ class ModelManager:
             logger.info("Model not found locally, downloading from Hugging Face...")
             snapshot_download(
                 repo_id="ghost5151/crypto-finbert",  
-                local_dir=str(model_path),
+                local_dir="/app/model",
             )
             logger.info("Model downloaded to %s", model_path)
 
