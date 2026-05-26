@@ -57,6 +57,11 @@ class ModelManager:
             torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
         ).to(self.device)
         self.model.eval()          # Disable dropout, batch-norm tracking
+        self.labels = [
+            self.model.config.id2label[i]
+            for i in range(len(self.model.config.id2label))
+        ]
+        logger.info("Labels loaded from config: %s", self.labels)
         self.max_length = max_length
 
         # Warm-up pass to compile CUDA kernels (avoids cold-start latency)
@@ -99,12 +104,12 @@ class ModelManager:
             label_idx = int(probs[i].argmax())
             results.append({
                 "headline":    headline,
-                "label":       LABELS[label_idx],
                 "confidence":  round(p[label_idx], 4),
+               "label": self.labels[label_idx],
                 "scores": {
-                    "bullish": round(p[1], 4),
-                    "bearish": round(p[0], 4),
-                    "neutral": round(p[2], 4),
+                    self.labels[0]: round(p[0], 4),   # negative
+                    self.labels[1]: round(p[1], 4),   # neutral
+                    self.labels[2]: round(p[2], 4),   # positive
                 },
                 "latency_ms":  round(per_item_ms, 2),
             })
