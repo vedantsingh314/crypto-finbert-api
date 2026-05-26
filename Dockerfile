@@ -20,7 +20,7 @@ COPY --from=builder /install /usr/local
 # Copy app source
 COPY app/  ./app/
 COPY news.py utils.py ./     
-COPY model/ ./model/                        
+                      
 
 # Security: run as non-root
 RUN useradd -m -u 1001 appuser
