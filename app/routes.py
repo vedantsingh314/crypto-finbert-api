@@ -140,7 +140,7 @@ async def coin_sentiment(coin: str, request: Request):
         raw_results = _model(request).predict(filtered)
 
         # Aggregate: average softmax scores across all headlines
-        keys = ["bullish", "bearish", "neutral"]
+        keys = ["negative", "neutral", "positive"]
         avg = {k: round(sum(r["scores"][k] for r in raw_results) / len(raw_results), 4) for k in keys}
         dominant = max(avg, key=avg.get)
 

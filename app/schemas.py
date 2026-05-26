@@ -45,10 +45,9 @@ class BatchPredictRequest(BaseModel):
 # ── Response models ──────────────────────────────────────────────────────────
 
 class SentimentScores(BaseModel):
-    """Raw softmax scores for all three classes."""
-    bullish: float
-    bearish: float
+    negative: float
     neutral: float
+    positive: float
 
 
 class PredictResponse(BaseModel):
