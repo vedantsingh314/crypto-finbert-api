@@ -1,6 +1,24 @@
-fastapi==0.110.0
-uvicorn==0.29.0
-transformers==4.41.2
-torch==2.2.2
+# ── Core API ──────────────────────────────────────────────────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.1          # [standard] pulls websockets + httptools for speed
+pydantic==2.9.2
+pydantic-settings==2.6.1
+
+# ── ML ────────────────────────────────────────────────────────────────────────
+torch==2.4.1                       # CPU build — swap with torch+cu121 for GPU (see below)
+transformers==4.46.1
+sentencepiece==0.2.0               # Required by some tokenisers
+
+# ── GPU build (uncomment and remove the CPU torch line above) ─────────────────
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.4.1+cu121
+
+# ── News / utils ──────────────────────────────────────────────────────────────
+requests==2.32.3
 python-dotenv==1.0.1
-requests==2.31.0
+
+# ── Performance (optional but recommended) ────────────────────────────────────
+# accelerate==1.0.1                # Faster model loading with device_map="auto"
+# onnxruntime==1.19.2              # ONNX export for CPU inference: ~3× faster
+
+huggingface_hub==0.26.2
