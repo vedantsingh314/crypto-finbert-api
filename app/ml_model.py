@@ -32,10 +32,11 @@ class ModelManager:
         model_path = Path(model_dir).resolve()
 
         if not model_path.exists():
-            logger.info("Model not found locally, downloading from Hugging Face...")
+            logger.info("Downloading from Hugging Face...")
             snapshot_download(
                 repo_id="ghost5151/crypto-finbert",
-                local_dir=str(model_path),   # use resolved absolute path
+                local_dir=str(model_path),
+                local_dir_use_symlinks=False,   # ← copies files directly, no symlinks
             )
             logger.info("Model downloaded to %s", model_path)
 
