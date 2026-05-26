@@ -9,12 +9,12 @@ Key decisions:
 """
 
 import time
-from pathlib import Path
+
 
 import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from huggingface_hub import snapshot_download
+
 
 from app.logger import get_logger
 
@@ -28,17 +28,6 @@ class ModelManager:
     """
 
     def __init__(self, model_dir: str, device: str = "auto", max_length: int = 128):
-        # Resolve to absolute path — avoids issues with relative paths inside Docker
-        model_path = Path(model_dir).resolve()
-
-        if not model_path.exists():
-            logger.info("Downloading from Hugging Face...")
-            snapshot_download(
-                repo_id="ghost5151/crypto-finbert",
-                local_dir=str(model_path),
-                local_dir_use_symlinks=False,   # ← copies files directly, no symlinks
-            )
-            logger.info("Model downloaded to %s", model_path)
 
         # Resolve device
         if device == "auto":
@@ -46,26 +35,28 @@ class ModelManager:
         else:
             self.device = device
 
-        logger.info("Loading tokenizer from %s", model_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(str(model_path))
+        # Load directly from HF Hub — no local path needed
+        HF_REPO = "ghost5151/crypto-finbert"
 
-        logger.info("Loading model on %s", self.device)
+        logger.info("Loading tokenizer from HF Hub: %s", HF_REPO)
+        self.tokenizer = AutoTokenizer.from_pretrained(HF_REPO)
+
+        logger.info("Loading model from HF Hub: %s on %s", HF_REPO, self.device)
         self.model = AutoModelForSequenceClassification.from_pretrained(
-            str(model_path),
+            HF_REPO,
             torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
         ).to(self.device)
         self.model.eval()
 
-        # Read labels directly from config — never hardcode
+        # Read labels directly from config
         self.labels = [
             self.model.config.id2label[i]
             for i in range(len(self.model.config.id2label))
         ]
-        logger.info("Labels loaded from config: %s", self.labels)
+        logger.info("Labels loaded: %s", self.labels)
 
         self.max_length = max_length
 
-        # Warm-up pass to compile CUDA kernels (avoids cold-start latency)
         if self.device == "cuda":
             self._warmup()
 
