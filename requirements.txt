@@ -9,9 +9,6 @@ torch==2.4.1                       # CPU build — swap with torch+cu121 for GPU
 transformers==4.46.1
 sentencepiece==0.2.0               # Required by some tokenisers
 
-# ── GPU build (uncomment and remove the CPU torch line above) ─────────────────
---extra-index-url https://download.pytorch.org/whl/cu121
-torch==2.4.1+cu121
 
 # ── News / utils ──────────────────────────────────────────────────────────────
 requests==2.32.3
